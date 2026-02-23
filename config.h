@@ -48,3 +48,19 @@
 // How often (in milliseconds) to read the sensor and publish to MQTT.
 // DHT21 minimum sample rate is 0.5 Hz (one reading every 2 seconds).
 #define PUBLISH_INTERVAL_MS 10000   // 10 seconds
+
+// ---------------------------------------------------------------------------
+// ASCOM Alpaca ObservingConditions server
+// ---------------------------------------------------------------------------
+// TCP port on which the Alpaca REST API is served (default: 11111)
+#define ALPACA_PORT          11111
+
+// Alpaca device index (almost always 0 for a single-device server)
+#define ALPACA_DEVICE_NUMBER 0
+
+// Human-readable name shown to Alpaca clients
+#define ALPACA_DEVICE_NAME   "DHT21 Weather Station"
+
+// Unique device GUID – generate once, do not change after first use
+// You can create a new one at https://www.uuidgenerator.net/
+#define ALPACA_DEVICE_UID    "550e8400-e29b-41d4-a716-446655440000"

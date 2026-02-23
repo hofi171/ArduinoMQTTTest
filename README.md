@@ -1,8 +1,9 @@
 # ArduinoMQTTTest
 
 An Arduino sketch for the **ESP8266** that reads **temperature** and **humidity**
-from a **DHT21 (AM2301)** sensor and publishes the values to an **MQTT broker**
-over WiFi.
+from a **DHT21 (AM2301)** sensor, publishes the values to an **MQTT broker**
+over WiFi, and exposes them as an **ASCOM Alpaca ObservingConditions** device
+so that astronomy software can retrieve live weather / observing-condition data.
 
 ---
 
@@ -14,6 +15,9 @@ over WiFi.
 - Supports optional MQTT username / password authentication
 - Reconnects automatically to WiFi and MQTT if the connection is lost
 - Configurable publish interval (default: every 10 seconds)
+- **ASCOM Alpaca ObservingConditions REST API** on TCP port 11111
+  - Temperature, humidity, and calculated dew point via ASCOM-standard JSON endpoints
+  - Alpaca UDP auto-discovery on port 32227
 
 ---
 
@@ -50,6 +54,9 @@ Install all libraries via the **Arduino IDE Library Manager**
 | **PubSubClient** | Nick O'Leary | MQTT client |
 | **DHT sensor library** | Adafruit | DHT21 driver |
 | **Adafruit Unified Sensor** | Adafruit | Required by DHT library |
+
+> `ESP8266WebServer` and `WiFiUdp` used by the Alpaca server are both bundled
+> with the ESP8266 Arduino core – no extra installation is needed.
 
 ### ESP8266 Arduino core
 
@@ -88,9 +95,18 @@ Open **`config.h`** and update the values before flashing:
 
 // Publish interval in milliseconds
 #define PUBLISH_INTERVAL_MS 10000
+
+// ASCOM Alpaca server
+#define ALPACA_PORT          11111
+#define ALPACA_DEVICE_NUMBER 0
+#define ALPACA_DEVICE_NAME   "DHT21 Weather Station"
+#define ALPACA_DEVICE_UID    "550e8400-e29b-41d4-a716-446655440000"  // change this!
 ```
 
 > ⚠️ Do **not** commit real WiFi passwords or MQTT credentials to version control.
+>
+> Generate a unique `ALPACA_DEVICE_UID` at <https://www.uuidgenerator.net/> and
+> keep it stable once deployed so that Alpaca clients can remember the device.
 
 ---
 
@@ -118,4 +134,65 @@ You can subscribe to these topics with any MQTT client, for example:
 
 ```bash
 mosquitto_sub -h 192.168.1.100 -t "home/sensor/#" -v
+```
+
+---
+
+## ASCOM Alpaca API
+
+The device runs a standard **ASCOM Alpaca ObservingConditions** server on
+`http://<device-ip>:11111`.
+
+### Management endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/management/apiversions` | Supported Alpaca API versions |
+| GET | `/management/v1/description` | Server description |
+| GET | `/management/v1/configureddevices` | List of Alpaca devices |
+
+### ObservingConditions endpoints (device 0)
+
+| Method | Path | Notes |
+|--------|------|-------|
+| GET | `/api/v1/observingconditions/0/connected` | Connection state |
+| PUT | `/api/v1/observingconditions/0/connected` | Set connection state |
+| GET | `/api/v1/observingconditions/0/temperature` | °C from DHT21 |
+| GET | `/api/v1/observingconditions/0/humidity` | %RH from DHT21 |
+| GET | `/api/v1/observingconditions/0/dewpoint` | °C, calculated |
+| GET | `/api/v1/observingconditions/0/averageperiod` | Always 0 |
+| PUT | `/api/v1/observingconditions/0/refresh` | No-op |
+| GET | `/api/v1/observingconditions/0/sensordescription` | Sensor description |
+| GET | `/api/v1/observingconditions/0/timesincelastupdate` | Seconds since last read |
+| GET | `/api/v1/observingconditions/0/cloudcover` | Not implemented (1024) |
+| GET | `/api/v1/observingconditions/0/pressure` | Not implemented (1024) |
+| GET | `/api/v1/observingconditions/0/rainrate` | Not implemented (1024) |
+| GET | `/api/v1/observingconditions/0/winddirection` | Not implemented (1024) |
+| GET | `/api/v1/observingconditions/0/windgust` | Not implemented (1024) |
+| GET | `/api/v1/observingconditions/0/windspeed` | Not implemented (1024) |
+
+All responses follow the standard Alpaca JSON envelope:
+
+```json
+{
+  "Value": 23.4,
+  "ClientTransactionID": 1,
+  "ServerTransactionID": 42,
+  "ErrorNumber": 0,
+  "ErrorMessage": ""
+}
+```
+
+### Auto-discovery
+
+The device listens for Alpaca UDP discovery packets on port **32227**.
+Alpaca-aware clients (e.g. N.I.N.A.) will find it automatically on the
+local network without any manual IP configuration.
+
+### Quick test
+
+```bash
+curl http://<device-ip>:11111/api/v1/observingconditions/0/temperature
+curl http://<device-ip>:11111/api/v1/observingconditions/0/humidity
+curl http://<device-ip>:11111/api/v1/observingconditions/0/dewpoint
 ```
