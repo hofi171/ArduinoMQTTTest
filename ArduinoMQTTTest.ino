@@ -1,8 +1,10 @@
 /*
- * Arduino ESP8266 - DHT21 Sensor to MQTT Broker
+ * Arduino ESP8266 - DHT21 Sensor to MQTT Broker + ASCOM Alpaca API
  *
- * Reads temperature and humidity from a DHT21 (AM2301) sensor
- * and publishes the values to an MQTT broker over WiFi.
+ * Reads temperature and humidity from a DHT21 (AM2301) sensor,
+ * publishes the values to an MQTT broker over WiFi, and exposes them
+ * via an ASCOM Alpaca ObservingConditions REST API so that astronomy
+ * applications can consume live weather / observing-condition data.
  *
  * Required Libraries:
  *   - ESP8266WiFi       (bundled with ESP8266 Arduino core)
@@ -31,6 +33,18 @@
 #define DHTTYPE DHT21
 
 DHT dht(DHT_PIN, DHTTYPE);
+
+// ---------------------------------------------------------------------------
+// Shared sensor readings (used by ascom_alpaca.h)
+// ---------------------------------------------------------------------------
+float         g_temperature = NAN;
+float         g_humidity    = NAN;
+unsigned long g_lastReadMs  = 0;
+
+// ---------------------------------------------------------------------------
+// ASCOM Alpaca server (must be included after config.h and the globals above)
+// ---------------------------------------------------------------------------
+#include "ascom_alpaca.h"
 
 // ---------------------------------------------------------------------------
 // MQTT / WiFi clients
@@ -119,6 +133,7 @@ void setup() {
 
   connectWiFi();
   connectMQTT();
+  initAlpaca();
 }
 
 // ---------------------------------------------------------------------------
@@ -131,6 +146,7 @@ void loop() {
   connectWiFi();
   connectMQTT();
   mqttClient.loop();
+  handleAlpaca();
 
   unsigned long now = millis();
   if (now - lastPublishMs < PUBLISH_INTERVAL_MS) {
@@ -148,6 +164,11 @@ void loop() {
     lastPublishMs = now - PUBLISH_INTERVAL_MS + 2000UL;
     return;
   }
+
+  // Update shared globals for ASCOM Alpaca server
+  g_temperature = temperature;
+  g_humidity    = humidity;
+  g_lastReadMs  = now;
 
   // Build payload strings
   char humBuf[10];
